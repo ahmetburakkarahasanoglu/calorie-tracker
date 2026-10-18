@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f5ef">
+  <title>Gün özeti · Kalori Takip</title>
+  <link rel="stylesheet" href="/site.css">
+  <style>
+    .status { padding: 18px; border: 1px solid #dce9dc; border-radius: 16px; background: #f2f8f1; text-align: center; }
+    .status.over { border-color: #eadfcf; background: #fcf8f2; }
+    .result-image { display: block; width: min(100%, 360px); aspect-ratio: 1; margin: 18px auto; border-radius: 18px; object-fit: cover; }
+  </style>
+</head>
+<body data-auth-required="true">
+  <header class="app-header">
+    <div class="app-header-top">
+      <a class="brand" href="/dashboard.html">Kalori Takip</a>
+      <div class="user-actions"><span>Merhaba, <strong data-username></strong></span><button class="secondary" data-logout type="button">Çıkış yap</button></div>
+    </div>
+    <nav class="nav" aria-label="Ana gezinme">
+      <a href="/dashboard.html" data-selected-date-link>Günlerim</a>
+      <a href="/calorie-goal.html">Günlük hedef</a>
+      <a href="/food-entry.html" data-selected-date-link>Yiyecek ekle</a>
+      <a href="/day-summary.html" aria-current="page" data-selected-date-link>Gün özeti</a>
+    </nav>
+  </header>
+  <main>
+    <p class="eyebrow">Günlük özet</p>
+    <h1 id="page-title">Günün nasıl geçti?</h1>
+    <p class="intro">İstediğin tarihi seçerek o günün özetini görüntüleyebilirsin.</p>
+    <section class="card">
+      <div class="field">
+        <label for="summary-date">Özetlenecek gün</label>
+        <input id="summary-date" type="date">
+      </div>
+      <section id="within-limit" class="status" style="margin-top:20px" hidden>
+        <h2>Tebrikler! Bugünkü hedefin içindesin 🎉</h2>
+        <p>Kendine gösterdiğin özen ve attığın küçük adımlar değerli. Böyle devam!</p>
+        <img class="result-image" src="/images/day-goal-met.png" alt="Gülümseyen futbolcu başparmağıyla tebrik ediyor">
+      </section>
+      <section id="over-limit" class="status over" style="margin-top:20px" hidden>
+        <h2>Bugün hedefinin üzerine çıktın</h2>
+        <p>Canını sıkma; tek bir gün ilerlemeni tanımlamaz. Yarın kendine iyi gelen seçimlerle yeniden başlayabilirsin.</p>
+        <img class="result-image" src="/images/day-goal-over.png" alt="Yüzünü elleriyle kapatan üzgün futbolcu">
+      </section>
+      <section id="no-limit" class="status" style="margin-top:20px" hidden>
+        <h2>Günün tamamlandı</h2>
+        <p>Bu gün için kalori hedefi belirlenmemiş. İstersen günlük hedefini ayrı sayfadan hesaplayabilirsin.</p>
+      </section>
+      <section id="not-completed" class="status" style="margin-top:20px" hidden>
+        <h2>Bu gün henüz tamamlanmadı</h2>
+        <p>Günlük durumu takvimde işaretlemek için Günlerim sayfasından “Günü bitir” seçeneğine bas.</p>
+      </section>
+      <div class="totals">
+        <div class="total"><span>Tüketilen</span><strong id="consumed">—</strong></div>
+        <div class="total"><span>Günlük hedef</span><strong id="limit">—</strong></div>
+        <div class="total"><span>Kalan</span><strong id="remaining">—</strong></div>
+      </div>
+      <a id="records-link" class="button-link secondary" href="/dashboard.html">Bu günün kayıtlarına dön</a>
+      <p id="global-error" class="error" role="alert" hidden></p>
+    </section>
+  </main>
+  <script src="/site.js"></script>
+  <script>
+    const dateInput = document.querySelector("#summary-date");
+    const error = document.querySelector("#global-error");
+
+    async function loadSummary(date) {
+      error.hidden = true;
+      const [summary, completions] = await Promise.all([
+        KaloriApp.api(`/api/food-entries/today?date=${encodeURIComponent(date)}`),
+        KaloriApp.api(`/api/food-days/completions?year=${date.slice(0, 4)}&month=${Number(date.slice(5, 7))}`)
+      ]);
+      const completion = completions.find((day) => day.date === date);
+      const isCompleted = Boolean(completion);
+      const hasLimit = summary.dailyCalorieLimit !== null;
+      const withinLimit = isCompleted && completion.metTarget === true;
+      const overLimit = isCompleted && completion.metTarget === false;
+      document.querySelector("#within-limit").hidden = !withinLimit;
+      document.querySelector("#over-limit").hidden = !overLimit;
+      document.querySelector("#no-limit").hidden = !isCompleted || hasLimit;
+      document.querySelector("#not-completed").hidden = isCompleted;
+      document.querySelector("#consumed").textContent = KaloriApp.formatCalories(summary.caloriesConsumed);
+      document.querySelector("#limit").textContent = KaloriApp.formatCalories(summary.dailyCalorieLimit);
+      document.querySelector("#remaining").textContent = summary.caloriesRemaining === null
+        ? "Belirlenmedi"
+        : KaloriApp.formatCalories(summary.caloriesRemaining);
+      document.querySelector("#page-title").textContent = KaloriApp.formatDate(date);
+    }
+
+    function changeDate(date) {
+      if (!date) return;
+      KaloriApp.selectDate(date);
+      document.querySelector("#records-link").href = `/dashboard.html?date=${encodeURIComponent(date)}`;
+      loadSummary(date).catch((exception) => {
+        error.textContent = exception.message;
+        error.hidden = false;
+      });
+    }
+
+    const initialDate = KaloriApp.selectedDate();
+    dateInput.value = initialDate;
+    changeDate(initialDate);
+    dateInput.addEventListener("change", () => changeDate(dateInput.value));
+  </script>
+</body>
+</html>

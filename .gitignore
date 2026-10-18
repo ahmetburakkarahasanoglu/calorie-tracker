@@ -1,0 +1,9 @@
+# Local secrets and environment-specific values.
+.env
+.env.*
+# Keep only the safe template in version control.
+!.env.example
+
+**/bin/
+**/obj/
+.venv/

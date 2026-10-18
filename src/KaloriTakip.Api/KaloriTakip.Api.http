@@ -1,0 +1,79 @@
+@KaloriTakip.Api_HostAddress = http://localhost:5070
+
+GET {{KaloriTakip.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+
+### Create account (cookies are retained by the VS Code HTTP client)
+POST {{KaloriTakip.Api_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "a-long-test-password"
+}
+
+### Sign in
+POST {{KaloriTakip.Api_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "a-long-test-password"
+}
+
+### Get signed-in profile
+GET {{KaloriTakip.Api_HostAddress}}/api/auth/me
+Accept: application/json
+
+### Calculate a daily calorie limit (requires sign-in)
+POST {{KaloriTakip.Api_HostAddress}}/api/calorie-limit
+Content-Type: application/json
+
+{
+  "weightKg": 80,
+  "heightCm": 180,
+  "age": 30,
+  "gender": "Male",
+  "activity": "Moderate",
+  "weeklyLossKg": 0.5
+}
+
+### Get the signed-in user's history
+GET {{KaloriTakip.Api_HostAddress}}/api/users/me/calorie-limits
+Accept: application/json
+
+### Analyze a food photo (use the website's camera/photo picker for multipart upload)
+# POST {{KaloriTakip.Api_HostAddress}}/api/food-analysis
+# Content-Type: multipart/form-data
+# Form field: image (JPG, PNG, or WebP; maximum 5 MB)
+
+### Add 120 grams of the selected local model food to today's food log
+POST {{KaloriTakip.Api_HostAddress}}/api/food-entries
+Content-Type: application/json
+
+{
+  "nutritionId": 1,
+  "grams": 120
+}
+
+### Get today's logged foods, consumed calories and remaining daily limit
+GET {{KaloriTakip.Api_HostAddress}}/api/food-entries/today
+Accept: application/json
+
+### Sign out
+POST {{KaloriTakip.Api_HostAddress}}/api/auth/logout
+
+### Invalid calculation input returns 400 with validation errors
+POST {{KaloriTakip.Api_HostAddress}}/api/calorie-limit
+Content-Type: application/json
+
+{
+  "weightKg": 80,
+  "heightCm": 180,
+  "age": 17,
+  "gender": "Male",
+  "activity": "Moderate",
+  "weeklyLossKg": 0.5
+}

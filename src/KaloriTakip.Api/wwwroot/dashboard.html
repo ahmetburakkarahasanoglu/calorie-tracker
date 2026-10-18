@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10b981">
+  <title>Günlerim · Kalori Takip</title>
+  <link rel="stylesheet" href="/site.css">
+  <style>
+    .calendar { margin: 20px 0 26px; padding: 18px; border: 1px solid #e3eee8; border-radius: 18px; background: linear-gradient(145deg, #f4fbf7, #fff 72%); }
+    .calendar-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+    .calendar-heading strong { color: #1a3529; font-size: 1rem; text-transform: capitalize; }
+    .calendar-heading button { width: 38px; min-height: 38px; padding: 0; border-radius: 50%; }
+    .calendar-heading button:disabled { cursor: default; opacity: 0.4; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+    .weekday { padding: 5px 0 8px; color: #718078; font-size: 0.75rem; font-weight: 750; text-align: center; }
+    .calendar-day { position: relative; display: grid; min-height: 50px; padding: 3px; place-items: center; border: 1px solid transparent; border-radius: 13px; background: #edf5f0; color: #263d32; font-size: 0.9rem; transition: background 140ms ease, border-color 140ms ease, transform 140ms ease; }
+    .calendar-day:hover:not(:disabled) { transform: translateY(-1px); border-color: #bcebd7; background: #ddf5e9; }
+    .calendar-day.selected { border-color: #10b981; background: #d8f6e7; color: #075d43; font-weight: 850; }
+    .calendar-day.today { box-shadow: inset 0 0 0 1px #10b981; font-weight: 850; }
+    .calendar-day:disabled { border-color: #f0f3f1; background: #f7f9f8; color: #c2cbc6; cursor: default; }
+    .calendar-day.empty { visibility: hidden; }
+    .day-mark { position: absolute; right: 3px; bottom: 1px; font-size: 0.76rem; font-weight: 900; line-height: 1; }
+    .day-mark.success { color: #08915e; }
+    .day-mark.over { color: #d14c43; }
+    .day-mark.unknown { color: #ba8220; }
+    .calendar-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 13px; color: var(--muted); font-size: 0.78rem; }
+    .calendar-legend strong { color: var(--green-dark); }
+    .totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .total { min-height: 92px; }
+    .total.featured-total { grid-column: 1 / -1; display: flex; min-height: 116px; align-items: center; justify-content: flex-start; gap: 18px; padding: 20px; border: 0; background: linear-gradient(115deg, #10b981, #36d6a0); color: #fff; box-shadow: 0 12px 26px #10b9812b; }
+    .featured-total .calorie-orbit { display: grid; width: 68px; height: 68px; flex: 0 0 auto; place-items: center; border: 2px solid #ffffff9c; border-radius: 50%; background: #ffffff24; color: #fff; font-size: 1.55rem; }
+    .featured-total .total-copy span { color: #eafff4; font-size: 0.85rem; }
+    .featured-total .total-copy strong { margin-top: 5px; color: #fff; font-size: clamp(1.35rem, 5vw, 1.8rem); letter-spacing: -0.03em; }
+    .finish-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    .completion-note { margin: 12px 0 0; color: var(--green-dark); font-weight: 700; }
+    @media (max-width: 420px) { .calendar-day { min-height: 42px; font-size: 0.82rem; } .calendar { padding: 10px; } }
+  </style>
+</head>
+<body data-auth-required="true">
+  <header class="app-header">
+    <div class="app-header-top">
+      <a class="brand" href="/dashboard.html">Kalori Takip</a>
+      <div class="user-actions"><span>Merhaba, <strong data-username></strong></span><button class="secondary" data-logout type="button">Çıkış yap</button></div>
+    </div>
+    <nav class="nav" aria-label="Ana gezinme">
+      <a href="/dashboard.html" aria-current="page" data-selected-date-link>Günlerim</a>
+      <a href="/calorie-goal.html">Günlük hedef</a>
+      <a href="/food-entry.html" data-selected-date-link>Yiyecek ekle</a>
+      <a href="/day-summary.html" data-selected-date-link>Gün özeti</a>
+    </nav>
+  </header>
+  <main>
+    <p class="eyebrow">Günlük takip</p>
+    <h1>Hangi günü takip ediyoruz?</h1>
+    <p class="intro">Yalnızca bugünün kaydını açabilirsin. Geçmiş ve gelecek günler açılamaz; hedef içinde tamamlanan geçmiş günler takvimde tik ile görünür.</p>
+    <section class="card">
+      <div class="calendar" aria-label="Günlük takip takvimi">
+        <div class="calendar-heading">
+          <button id="previous-month" class="secondary" type="button" aria-label="Önceki ay">‹</button>
+          <strong id="month-label"></strong>
+          <button id="next-month" class="secondary" type="button" aria-label="Sonraki ay">›</button>
+        </div>
+        <div id="calendar-grid" class="calendar-grid" role="grid" aria-label="Takvim"></div>
+        <button id="today-button" class="secondary" type="button" style="margin-top:12px">Bugüne dön</button>
+        <div class="calendar-legend" aria-label="Takvim işaretleri">
+          <span><strong>✓</strong> Hedef içinde</span>
+          <span><strong>×</strong> Hedef aşıldı</span>
+          <span><strong>!</strong> Gün tamamlandı, hedef yok</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="selected-date">Seçili gün</label>
+        <input id="selected-date" type="date" readonly>
+      </div>
+      <p id="completion-note" class="completion-note" hidden></p>
+      <div class="totals" aria-live="polite">
+        <div class="total"><span>Günlük hedef</span><strong id="daily-limit">—</strong></div>
+        <div class="total"><span>Tüketilen</span><strong id="consumed">—</strong></div>
+        <div class="total featured-total">
+          <span class="calorie-orbit" aria-hidden="true">↗</span>
+          <div class="total-copy"><span>Kalan kalori</span><strong id="remaining">—</strong></div>
+        </div>
+      </div>
+      <h2 id="day-title">Gün kayıtları</h2>
+      <p id="empty-state" class="intro" hidden>Bu güne henüz yiyecek eklenmemiş.</p>
+      <ul id="entry-list" class="entry-list" aria-live="polite"></ul>
+      <p id="read-only-note" class="hint" hidden></p>
+      <div class="fields" style="margin-top:20px">
+        <a id="add-food-link" class="button-link" href="/food-entry.html">Bu güne yiyecek ekle</a>
+        <a id="summary-link" class="button-link secondary" href="/day-summary.html">Gün özetini gör</a>
+      </div>
+      <div class="finish-actions">
+        <button id="finish-day" type="button">Günü bitir</button>
+      </div>
+      <p id="global-error" class="error" role="alert" hidden></p>
+    </section>
+  </main>
+  <script src="/site.js"></script>
+  <script>
+    const dateInput = document.querySelector("#selected-date");
+    const error = document.querySelector("#global-error");
+    const entryList = document.querySelector("#entry-list");
+    const emptyState = document.querySelector("#empty-state");
+    const dayTitle = document.querySelector("#day-title");
+    const calendarGrid = document.querySelector("#calendar-grid");
+    const todayDate = KaloriApp.today();
+    let visibleMonth = new Date(`${todayDate.slice(0, 7)}-01T12:00:00`);
+    let completionMap = new Map();
+    let selectedIsCompleted = false;
+
+    const monthLabel = new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric" });
+
+    async function loadCompletions() {
+      const year = visibleMonth.getFullYear();
+      const month = visibleMonth.getMonth() + 1;
+      const completions = await KaloriApp.api(`/api/food-days/completions?year=${year}&month=${month}`);
+      completionMap = new Map(completions.map((day) => [day.date, day.metTarget]));
+    }
+
+    function renderCalendar() {
+      const year = visibleMonth.getFullYear();
+      const month = visibleMonth.getMonth();
+      const visibleMonthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
+      document.querySelector("#next-month").disabled = visibleMonthKey >= todayDate.slice(0, 7);
+      document.querySelector("#month-label").textContent = monthLabel.format(visibleMonth);
+      calendarGrid.replaceChildren();
+      for (const weekday of ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pa"]) {
+        const label = document.createElement("span");
+        label.className = "weekday";
+        label.setAttribute("role", "columnheader");
+        label.textContent = weekday;
+        calendarGrid.append(label);
+      }
+
+      const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      for (let index = 0; index < firstWeekday; index++) {
+        const empty = document.createElement("span");
+        empty.className = "calendar-day empty";
+        calendarGrid.append(empty);
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "calendar-day";
+        button.setAttribute("role", "gridcell");
+        button.setAttribute("aria-label", KaloriApp.formatDate(date));
+        button.textContent = String(day);
+        if (date === todayDate && date === dateInput.value) {
+          button.classList.add("selected");
+          button.setAttribute("aria-selected", "true");
+        }
+        if (date === todayDate) {
+          button.classList.add("today");
+          button.setAttribute("aria-current", "date");
+        }
+        if (date !== todayDate) {
+          button.disabled = true;
+          button.title = date < todayDate
+            ? "Geçmiş günler açılamaz"
+            : "Gelecek günler açılamaz";
+          button.setAttribute("aria-disabled", "true");
+        }
+        if (completionMap.has(date)) {
+          const metTarget = completionMap.get(date);
+          const mark = document.createElement("span");
+          mark.className = `day-mark ${metTarget === true ? "success" : metTarget === false ? "over" : "unknown"}`;
+          mark.textContent = metTarget === true ? "✓" : metTarget === false ? "×" : "!";
+          button.setAttribute("aria-label", `${KaloriApp.formatDate(date)}; ${
+            metTarget === true ? "hedef içinde tamamlandı" : metTarget === false ? "hedef aşılmış" : "hedef belirlenmemiş"
+          }${date !== todayDate ? "; takvimden açılamaz" : ""}`);
+          button.append(mark);
+          button.title = `${metTarget === true
+            ? "Gün tamamlandı: hedef içindesin"
+            : metTarget === false ? "Gün tamamlandı: hedef aşıldı" : "Gün tamamlandı: hedef belirlenmemiş"}${
+              date !== todayDate ? "; bu gün takvimden açılamaz" : ""
+            }`;
+        }
+        button.addEventListener("click", () => {
+          if (date !== todayDate) return;
+          dateInput.value = date;
+          visibleMonth = new Date(`${date.slice(0, 7)}-01T12:00:00`);
+          updateDateLinks(date);
+          renderCalendar();
+          loadDay(date).catch(showError);
+        });
+        calendarGrid.append(button);
+      }
+    }
+
+    function showError(exception) {
+      error.textContent = exception.message;
+      error.hidden = false;
+    }
+
+    function updateDateLinks(date) {
+      KaloriApp.selectDate(date);
+      document.querySelector("#add-food-link").href = `/food-entry.html?date=${encodeURIComponent(date)}`;
+      document.querySelector("#summary-link").href = `/day-summary.html?date=${encodeURIComponent(date)}`;
+      dayTitle.textContent = `${KaloriApp.formatDate(date)} kayıtları`;
+    }
+
+    async function loadDay(date) {
+      error.hidden = true;
+      const summary = await KaloriApp.api(`/api/food-entries/today?date=${encodeURIComponent(date)}`);
+      selectedIsCompleted = completionMap.has(date);
+      document.querySelector("#daily-limit").textContent = KaloriApp.formatCalories(summary.dailyCalorieLimit);
+      document.querySelector("#consumed").textContent = KaloriApp.formatCalories(summary.caloriesConsumed);
+      document.querySelector("#remaining").textContent = summary.caloriesRemaining === null
+        ? "Önce hedef belirle"
+        : KaloriApp.formatCalories(summary.caloriesRemaining);
+      entryList.replaceChildren();
+      emptyState.hidden = summary.entries.length !== 0;
+      document.querySelector("#completion-note").hidden = !selectedIsCompleted;
+      document.querySelector("#completion-note").textContent = selectedIsCompleted
+        ? completionMap.get(date) === true
+          ? "✓ Bu gün tamamlandı ve günlük hedefin içindesin."
+          : completionMap.get(date) === false
+            ? "× Bu gün tamamlandı ve günlük hedefin aşıldı."
+            : "! Bu gün tamamlandı; bu gün için kalori hedefi belirlenmemiş."
+        : "";
+      const canEditSelectedDay = date === todayDate && !selectedIsCompleted;
+      document.querySelector("#add-food-link").hidden = !canEditSelectedDay;
+      const finishButton = document.querySelector("#finish-day");
+      finishButton.hidden = !canEditSelectedDay;
+      finishButton.textContent = "Günü bitir";
+      const readOnlyNote = document.querySelector("#read-only-note");
+      readOnlyNote.hidden = date === todayDate;
+      readOnlyNote.textContent = date < todayDate
+        ? "Geçmiş günler görüntülenebilir; kayıt ekleme, silme ve tamamlama yalnızca bugün kullanılabilir."
+        : "Gelecek günün takibi, tarih geldiğinde açılır.";
+
+      for (const entry of summary.entries) {
+        const item = document.createElement("li");
+        item.className = "entry";
+        const info = document.createElement("div");
+        info.className = "entry-info";
+        const name = document.createElement("strong");
+        name.textContent = entry.productName;
+        const details = document.createElement("span");
+        const time = new Intl.DateTimeFormat("tr-TR", {
+          timeZone: "Europe/Istanbul",
+          timeStyle: "short"
+        }).format(new Date(entry.createdAt));
+        details.textContent = `${entry.grams} g · ${time}`;
+        info.append(name, details);
+        const actions = document.createElement("div");
+        actions.className = "entry-actions";
+        const calories = document.createElement("strong");
+        calories.textContent = KaloriApp.formatCalories(entry.calories);
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "danger";
+        deleteButton.type = "button";
+        deleteButton.textContent = "Sil";
+        deleteButton.setAttribute("aria-label", `${entry.productName} kaydını sil`);
+        deleteButton.hidden = date !== todayDate || selectedIsCompleted;
+        deleteButton.addEventListener("click", async () => {
+          if (!window.confirm(`${entry.productName} kaydını silmek istiyor musun?`)) return;
+          deleteButton.disabled = true;
+          try {
+            await KaloriApp.api(`/api/food-entries/${entry.id}`, { method: "DELETE" });
+            await loadDay(date);
+          } catch (exception) {
+            error.textContent = exception.message;
+            error.hidden = false;
+            deleteButton.disabled = false;
+          }
+        });
+        actions.append(calories, deleteButton);
+        item.append(info, actions);
+        entryList.append(item);
+      }
+    }
+
+    dateInput.value = todayDate;
+    visibleMonth = new Date(`${dateInput.value.slice(0, 7)}-01T12:00:00`);
+    updateDateLinks(dateInput.value);
+    loadCompletions()
+      .then(() => {
+        renderCalendar();
+        return loadDay(dateInput.value);
+      })
+      .catch(showError);
+
+    dateInput.addEventListener("change", () => {
+      if (dateInput.value !== todayDate) {
+        dateInput.value = todayDate;
+        return;
+      }
+      visibleMonth = new Date(`${dateInput.value.slice(0, 7)}-01T12:00:00`);
+      updateDateLinks(dateInput.value);
+      loadCompletions().then(() => {
+        renderCalendar();
+        return loadDay(dateInput.value);
+      }).catch(showError);
+    });
+
+    document.querySelector("#previous-month").addEventListener("click", () => {
+      visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1, 12);
+      loadCompletions().then(renderCalendar).catch(showError);
+    });
+    document.querySelector("#next-month").addEventListener("click", () => {
+      const next = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1, 12);
+      if (next > new Date(`${todayDate.slice(0, 7)}-01T12:00:00`)) return;
+      visibleMonth = next;
+      loadCompletions().then(renderCalendar).catch(showError);
+    });
+    document.querySelector("#today-button").addEventListener("click", () => {
+      dateInput.value = todayDate;
+      visibleMonth = new Date(`${todayDate.slice(0, 7)}-01T12:00:00`);
+      updateDateLinks(todayDate);
+      loadCompletions().then(() => {
+        renderCalendar();
+        return loadDay(todayDate);
+      }).catch(showError);
+    });
+
+    document.querySelector("#finish-day").addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      error.hidden = true;
+      try {
+        await KaloriApp.api(`/api/food-days/${encodeURIComponent(dateInput.value)}/complete`, { method: "POST" });
+        await loadCompletions();
+        renderCalendar();
+        await loadDay(dateInput.value);
+      } catch (exception) {
+        showError(exception);
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    let activeDate = todayDate;
+    window.setInterval(() => {
+      const currentDate = KaloriApp.today();
+      if (currentDate === activeDate) return;
+      activeDate = currentDate;
+      dateInput.value = currentDate;
+      visibleMonth = new Date(`${currentDate.slice(0, 7)}-01T12:00:00`);
+      updateDateLinks(currentDate);
+      loadCompletions()
+        .then(() => {
+          renderCalendar();
+          return loadDay(currentDate);
+        })
+        .catch(showError);
+    }, 30_000);
+  </script>
+</body>
+</html>

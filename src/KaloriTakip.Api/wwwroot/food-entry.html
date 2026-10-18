@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f5ef">
+  <title>Yiyecek ekle · Kalori Takip</title>
+  <link rel="stylesheet" href="/site.css">
+  <style>
+    .preview { display: block; width: min(100%, 360px); max-height: 320px; margin-top: 12px; border-radius: 14px; object-fit: cover; }
+    .nutrition-card { margin-top: 18px; padding: 18px; border: 1px solid #dce9dc; border-radius: 14px; background: #f6faf4; }
+    .nutrition-card h2 { margin: 0 0 7px; }
+  </style>
+</head>
+<body data-auth-required="true">
+  <header class="app-header">
+    <div class="app-header-top">
+      <a class="brand" href="/dashboard.html">Kalori Takip</a>
+      <div class="user-actions"><span>Merhaba, <strong data-username></strong></span><button class="secondary" data-logout type="button">Çıkış yap</button></div>
+    </div>
+    <nav class="nav" aria-label="Ana gezinme">
+      <a href="/dashboard.html" data-selected-date-link>Günlerim</a>
+      <a href="/calorie-goal.html">Günlük hedef</a>
+      <a href="/food-entry.html" aria-current="page" data-selected-date-link>Yiyecek ekle</a>
+      <a href="/day-summary.html" data-selected-date-link>Gün özeti</a>
+    </nav>
+  </header>
+  <main>
+    <p class="eyebrow">Yiyecek kaydı</p>
+    <h1>Bugünkü yediklerini ekle.</h1>
+    <p class="intro">Fotoğrafı analiz edelim, porsiyonu sen belirle. Kayıtlar sadece bugünün günlüğüne eklenir.</p>
+    <section class="card">
+      <div class="field">
+        <label for="entry-date">Bugünün tarihi</label>
+        <input id="entry-date" type="date" readonly>
+        <p id="date-note" class="hint" hidden></p>
+      </div>
+      <div class="field" style="margin-top:18px">
+        <label for="food-photo">Yiyecek fotoğrafı</label>
+        <input id="food-photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment">
+        <p class="hint">JPG, PNG veya WebP; en fazla 5 MB.</p>
+        <img id="photo-preview" class="preview" alt="Seçilen yiyecek fotoğrafı" hidden>
+        <button id="analyze-photo" type="button" style="margin-top:14px">Fotoğrafı analiz et</button>
+      </div>
+      <p class="motivation">Denge kusursuzluk değil; kendine iyi bakmayı sürdürmektir.</p>
+      <p id="global-error" class="error" role="alert" hidden></p>
+      <section id="nutrition-card" class="nutrition-card" hidden>
+        <h2>Fotoğrafta: <span id="recognized-name"></span></h2>
+        <p>Tanıma güveni: <strong id="confidence"></strong></p>
+        <div class="field">
+          <label for="nutrition-option">Besin bilgisi</label>
+          <select id="nutrition-option"></select>
+          <p id="nutrition-info" class="hint"></p>
+        </div>
+        <div class="fields" style="margin-top:14px">
+          <div class="field"><label for="grams">Porsiyon (gram)</label><input id="grams" type="number" min="0.1" max="10000" step="1" value="100"></div>
+          <div class="field"><label for="calorie-preview">Tahmini kalori</label><input id="calorie-preview" type="text" readonly value="—"></div>
+        </div>
+        <button id="add-food" type="button" style="margin-top:16px">Seçilen güne ekle</button>
+      </section>
+      <a id="back-link" class="button-link secondary" href="/dashboard.html" style="margin-top:20px">Gün kayıtlarına dön</a>
+    </section>
+  </main>
+  <script src="/site.js"></script>
+  <script>
+    const dateInput = document.querySelector("#entry-date");
+    const fileInput = document.querySelector("#food-photo");
+    const preview = document.querySelector("#photo-preview");
+    const error = document.querySelector("#global-error");
+    const nutritionCard = document.querySelector("#nutrition-card");
+    const nutritionOption = document.querySelector("#nutrition-option");
+    const gramsInput = document.querySelector("#grams");
+    const caloriePreview = document.querySelector("#calorie-preview");
+    const nutritionInfo = document.querySelector("#nutrition-info");
+    const addButton = document.querySelector("#add-food");
+    const dateNote = document.querySelector("#date-note");
+    let selectedFood = null;
+    let previewUrl = null;
+    let isDayLocked = false;
+
+    async function loadToday() {
+      const today = KaloriApp.today();
+      dateInput.value = today;
+      dateInput.min = today;
+      dateInput.max = today;
+      KaloriApp.selectDate(today);
+      document.querySelector("#back-link").href = "/dashboard.html";
+      const completions = await KaloriApp.api(`/api/food-days/completions?year=${today.slice(0, 4)}&month=${Number(today.slice(5, 7))}`);
+      isDayLocked = completions.some((item) => item.date === today);
+      addButton.disabled = isDayLocked;
+      dateNote.hidden = !isDayLocked;
+      dateNote.textContent = isDayLocked
+        ? "Bugün zaten tamamlandı; yeni kayıt eklenemez."
+        : "Geçmiş ve gelecek günler açılamaz; yarın bugünün tarihi otomatik güncellenecek.";
+    }
+
+    function selectedNutrition() {
+      return selectedFood?.nutritionOptions.find((option) => String(option.nutritionId) === nutritionOption.value) ?? null;
+    }
+
+    function updateNutrition() {
+      const nutrition = selectedNutrition();
+      if (!nutrition) return;
+      nutritionInfo.textContent = `${nutrition.caloriesPer100Grams} kcal / 100 g`;
+      const grams = Number(gramsInput.value);
+      caloriePreview.value = Number.isFinite(grams) && grams > 0
+        ? KaloriApp.formatCalories(nutrition.caloriesPer100Grams * grams / 100)
+        : "Gram miktarını kontrol et";
+    }
+
+    loadToday().catch((exception) => {
+      error.textContent = exception.message;
+      error.hidden = false;
+    });
+
+    fileInput.addEventListener("change", () => {
+      error.hidden = true;
+      nutritionCard.hidden = true;
+      selectedFood = null;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      const file = fileInput.files[0];
+      preview.hidden = !file;
+      if (file) {
+        previewUrl = URL.createObjectURL(file);
+        preview.src = previewUrl;
+      } else {
+        preview.removeAttribute("src");
+        previewUrl = null;
+      }
+    });
+
+    document.querySelector("#analyze-photo").addEventListener("click", async (event) => {
+      error.hidden = true;
+      const file = fileInput.files[0];
+      if (!file) {
+        error.textContent = "Önce yiyeceğinin fotoğrafını çek veya seç.";
+        error.hidden = false;
+        return;
+      }
+      const button = event.currentTarget;
+      button.disabled = true;
+      button.textContent = "Fotoğraf analiz ediliyor…";
+      try {
+        const body = new FormData();
+        body.append("image", file);
+        const analysis = await KaloriApp.api("/api/food-analysis", { method: "POST", body });
+        selectedFood = analysis;
+        document.querySelector("#recognized-name").textContent = analysis.displayName;
+        document.querySelector("#confidence").textContent = `${Math.round(analysis.confidence * 100)}%`;
+        nutritionOption.replaceChildren();
+        for (const option of analysis.nutritionOptions) {
+          const element = document.createElement("option");
+          element.value = option.nutritionId;
+          element.textContent = `${option.description} (${option.dataType || "Diyet modeli"})`;
+          nutritionOption.append(element);
+        }
+        gramsInput.value = analysis.nutritionOptions[0]?.servingGrams ?? 100;
+        nutritionCard.hidden = false;
+        updateNutrition();
+      } catch (exception) {
+        error.textContent = exception.message;
+        error.hidden = false;
+      } finally {
+        button.disabled = false;
+        button.textContent = "Fotoğrafı analiz et";
+      }
+    });
+
+    nutritionOption.addEventListener("change", () => {
+      const nutrition = selectedNutrition();
+      if (nutrition) gramsInput.value = nutrition.servingGrams;
+      updateNutrition();
+    });
+    gramsInput.addEventListener("input", updateNutrition);
+
+    addButton.addEventListener("click", async (event) => {
+      error.hidden = true;
+      const nutrition = selectedNutrition();
+      const grams = Number(gramsInput.value);
+      if (isDayLocked || !nutrition || !Number.isFinite(grams) || grams <= 0 || !dateInput.value) {
+        error.textContent = "Besin, gram miktarı ve tarih bilgilerini kontrol et.";
+        error.hidden = false;
+        return;
+      }
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        await KaloriApp.api("/api/food-entries", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nutritionId: nutrition.nutritionId, grams, date: dateInput.value })
+        });
+        window.location.assign(`/dashboard.html?date=${encodeURIComponent(dateInput.value)}`);
+      } catch (exception) {
+        error.textContent = exception.message;
+        error.hidden = false;
+        button.disabled = false;
+      }
+    });
+
+    let activeDate = KaloriApp.today();
+    window.setInterval(() => {
+      const currentDate = KaloriApp.today();
+      if (currentDate === activeDate) return;
+      activeDate = currentDate;
+      loadToday().catch((exception) => {
+        error.textContent = exception.message;
+        error.hidden = false;
+      });
+    }, 30_000);
+  </script>
+</body>
+</html>

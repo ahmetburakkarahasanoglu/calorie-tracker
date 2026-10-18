@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f5ef">
+  <title>Günlük hedef · Kalori Takip</title>
+  <link rel="stylesheet" href="/site.css">
+</head>
+<body data-auth-required="true">
+  <header class="app-header">
+    <div class="app-header-top">
+      <a class="brand" href="/dashboard.html">Kalori Takip</a>
+      <div class="user-actions"><span>Merhaba, <strong data-username></strong></span><button class="secondary" data-logout type="button">Çıkış yap</button></div>
+    </div>
+    <nav class="nav" aria-label="Ana gezinme">
+      <a href="/dashboard.html" data-selected-date-link>Günlerim</a>
+      <a href="/calorie-goal.html" aria-current="page">Günlük hedef</a>
+      <a href="/food-entry.html" data-selected-date-link>Yiyecek ekle</a>
+      <a href="/day-summary.html" data-selected-date-link>Gün özeti</a>
+    </nav>
+  </header>
+  <main>
+    <p class="eyebrow">Kişisel hedef</p>
+    <h1>Günlük kalori hedefini belirle.</h1>
+    <p class="intro">Bilgilerini gir; sana uygun tahmini günlük kalori limitini hesaplayalım. İstediğin zaman yeni bir hedef oluşturabilirsin.</p>
+    <section class="card">
+      <form id="goal-form">
+        <div class="fields">
+          <div class="field"><label for="weight">Kilo (kg)</label><input id="weight" name="weightKg" type="number" min="0.1" max="500" step="0.1" value="80" required></div>
+          <div class="field"><label for="height">Boy (cm)</label><input id="height" name="heightCm" type="number" min="50" max="300" step="0.1" value="180" required></div>
+          <div class="field"><label for="age">Yaş</label><input id="age" name="age" type="number" min="18" max="120" step="1" value="30" required></div>
+          <div class="field"><label for="gender">Cinsiyet</label><select id="gender" name="gender" required><option value="Male">Erkek</option><option value="Female">Kadın</option></select></div>
+          <div class="field"><label for="activity">Günlük hareket seviyesi</label><select id="activity" name="activity" required><option value="Sedentary">Hareketsiz (çoğunlukla oturarak)</option><option value="Light">Hafif (haftada 1–3 gün egzersiz)</option><option value="Moderate" selected>Orta (haftada 3–5 gün egzersiz)</option><option value="Active">Yüksek (haftada 6–7 gün egzersiz)</option><option value="VeryActive">Çok yüksek (yoğun fiziksel aktivite)</option></select></div>
+          <div class="field"><label for="weekly-loss">Haftalık kilo verme hedefi (kg)</label><input id="weekly-loss" name="weeklyLossKg" type="number" min="0" max="1" step="0.1" value="0.5" required><p class="hint">0–1 kg arasında; 0 seçersen koruma kalorisi hesaplanır.</p></div>
+        </div>
+        <button id="submit-button" type="submit">Kalori limitimi hesapla</button>
+      </form>
+      <section id="goal-result" class="motivation" aria-live="polite" hidden></section>
+      <p class="hint">Bu değer tahminidir, kişisel sağlık önerisi yerine geçmez.</p>
+      <p class="motivation">Hedefin sana yol göstersin; önemli olan sana iyi gelen denge.</p>
+      <p id="global-error" class="error" role="alert" hidden></p>
+      <a class="button-link secondary" href="/dashboard.html" data-selected-date-link style="margin-top:18px">Günlerime dön</a>
+    </section>
+  </main>
+  <script src="/site.js"></script>
+  <script>
+    const form = document.querySelector("#goal-form");
+    const submitButton = document.querySelector("#submit-button");
+    const error = document.querySelector("#global-error");
+    const result = document.querySelector("#goal-result");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      error.hidden = true;
+      submitButton.disabled = true;
+      submitButton.textContent = "Hesaplanıyor…";
+      const data = new FormData(form);
+      const request = {
+        weightKg: Number(data.get("weightKg")),
+        heightCm: Number(data.get("heightCm")),
+        age: Number(data.get("age")),
+        gender: data.get("gender"),
+        activity: data.get("activity"),
+        weeklyLossKg: Number(data.get("weeklyLossKg"))
+      };
+      try {
+        const response = await KaloriApp.api("/api/calorie-limit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request)
+        });
+        result.textContent = `Yeni günlük kalori hedefin: ${KaloriApp.formatCalories(response.dailyCalorieLimit)}. Hedefin kaydedildi.`;
+        result.hidden = false;
+      } catch (exception) {
+        error.textContent = exception.message;
+        error.hidden = false;
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = "Kalori limitimi hesapla";
+      }
+    });
+  </script>
+</body>
+</html>
